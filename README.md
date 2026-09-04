@@ -1,6 +1,6 @@
 # HAVA VPN
 
-MVP единой системы продажи VPN-доступа: Telegram-бот, Mini App, FastAPI backend, Telegram Stars, PostgreSQL, web-admin и сменный VPN provider.
+MVP единой системы продажи VPN-доступа: Telegram-бот, Mini App, FastAPI backend, Telegram Stars, PostgreSQL, web-admin и подключение внешнего VPN по API-ключу.
 
 ## Что уже работает
 
@@ -8,12 +8,12 @@ MVP единой системы продажи VPN-доступа: Telegram-бо
 - тарифы из БД и редактируемые admin API;
 - Stars invoice → `pre_checkout_query` → идемпотентный `successful_payment`;
 - раздельные состояния оплаты и provisioning;
-- создание/продление одного VPN-профиля через `VpnProvider`;
+- создание и продление VPN-профиля через внешний API;
 - случайная subscription URL, отзыв и перевыпуск;
 - локальная генерация QR API без сторонних сервисов;
 - Mini App с экранами Главная, Тарифы, VPN и Профиль;
 - базовый dashboard `/admin`, обращения поддержки и audit log;
-- mock provider для разработки и Marzban adapter для продакшена.
+- единый VPN API client без собственной VPN-инфраструктуры и протокольной логики.
 
 ## Локальный запуск
 
@@ -42,24 +42,36 @@ https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://YOUR_DOMAIN/telegram/
 
 Не вставляйте реальный токен в URL истории терминала. Для production лучше выполнить запрос через безопасный deployment secret.
 
-## Подключение Marzban
+## Подключение VPN API
 
 В `.env`:
 
 ```dotenv
-VPN_PROVIDER=marzban
-MARZBAN_URL=https://panel.example.com
-MARZBAN_USERNAME=...
-MARZBAN_PASSWORD=...
+VPN_API_URL=https://provider.example/api
+VPN_API_KEY=...
+VPN_API_AUTH_HEADER=Authorization
 ```
 
-Совместимость полей Marzban проверьте с версией вашей панели. Пока `VPN_PROVIDER=mock`, генерируется демонстрационная VLESS-строка и реальный VPN-трафик не поднимается.
+По умолчанию ключ передаётся как `Authorization: Bearer <VPN_API_KEY>`. Если сервис использует `X-API-Key`, задайте `VPN_API_AUTH_HEADER=X-API-Key`.
+
+Ожидаемый контракт внешнего сервиса:
+
+```text
+POST   /users
+PATCH  /users/{username}
+POST   /users/{username}/enable
+POST   /users/{username}/disable
+DELETE /users/{username}
+GET    /users/{username}/subscription
+```
+
+Последний endpoint должен возвращать JSON с полем `subscription` или `config`. При получении документации конкретного VPN API меняется только [client.py](app/vpn/client.py).
 
 ## Важное перед production
 
 1. Перевыпустите Telegram bot token в BotFather: текущий токен был опубликован в переписке.
 2. Замените `ADMIN_TOKEN` и `WEBHOOK_SECRET` длинными случайными значениями.
-3. Укажите HTTPS-домен, строгий `CORS_ORIGINS`, PostgreSQL и реальные credentials Marzban.
+3. Укажите HTTPS-домен, строгий `CORS_ORIGINS`, PostgreSQL, `VPN_API_URL` и `VPN_API_KEY`.
 4. Поставьте reverse proxy, rate limiting, резервное копирование и worker для повторов provisioning/уведомлений.
 5. Добавьте admin 2FA, юридические документы и мониторинг.
 
@@ -71,7 +83,7 @@ app/bot/       aiogram handlers и Stars
 app/core/      настройки и проверка Telegram initData
 app/db/        модели и async session
 app/services/  пользователи и provisioning
-app/vpn/       независимый Mock/Marzban adapter
+app/vpn/       клиент внешнего VPN API по API-ключу
 app/static/    Mini App и базовая web-admin
 tests/         проверки security primitives
 ```

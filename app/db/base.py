@@ -125,8 +125,6 @@ class Node(Base):
     country: Mapped[str] = mapped_column(String(2))
     city: Mapped[str] = mapped_column(String(80), default="")
     hostname: Mapped[str] = mapped_column(String(255))
-    provider: Mapped[str] = mapped_column(String(40), default="marzban")
-    protocol: Mapped[str] = mapped_column(String(30), default="VLESS")
     status: Mapped[str] = mapped_column(String(20), default="ONLINE")
     load: Mapped[str] = mapped_column(String(20), default="low")
 

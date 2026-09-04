@@ -7,7 +7,7 @@ from app.core.telegram import token_hash
 from app.db.base import Subscription, SubscriptionStatus, SubscriptionToken
 from app.db.session import get_db
 from app.services.subscriptions import aware
-from app.vpn import get_vpn_provider
+from app.vpn import get_vpn_client
 from datetime import datetime, timezone
 
 router = APIRouter()
@@ -21,5 +21,4 @@ async def subscription(token: str, db: AsyncSession = Depends(get_db)):
     sub = await db.scalar(select(Subscription).where(Subscription.id == item.subscription_id))
     if sub.status != SubscriptionStatus.ACTIVE or aware(sub.expires_at) <= datetime.now(timezone.utc):
         raise HTTPException(403, "Subscription is not active")
-    return await get_vpn_provider().get_subscription(sub.vpn_username)
-
+    return await get_vpn_client().get_subscription(sub.vpn_username)

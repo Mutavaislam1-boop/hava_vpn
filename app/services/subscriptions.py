@@ -5,7 +5,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.telegram import token_hash
 from app.db.base import Plan, Subscription, SubscriptionStatus, SubscriptionToken, User
-from app.vpn import get_vpn_provider
+from app.vpn import get_vpn_client
 
 
 def aware(value):
@@ -28,19 +28,19 @@ async def provision(db: AsyncSession, user: User, plan: Plan):
     base = max(aware(sub.expires_at), now) if sub and sub.expires_at else now
     expires = base + timedelta(days=plan.duration_days)
     traffic = plan.traffic_limit_gb * 1024**3 if plan.traffic_limit_gb else None
-    provider = get_vpn_provider()
+    client = get_vpn_client()
     try:
         if not sub:
             sub = Subscription(user_id=user.id, plan_id=plan.id, vpn_username=f"hava_{user.telegram_id}", expires_at=expires)
             db.add(sub)
             await db.flush()
-            await provider.create_user(sub.vpn_username, int(expires.timestamp()), traffic)
+            await client.create_user(sub.vpn_username, int(expires.timestamp()), traffic)
             raw = secrets.token_urlsafe(32)
             db.add(SubscriptionToken(subscription_id=sub.id, token_hash=token_hash(raw), token=raw))
         else:
             sub.plan_id, sub.expires_at = plan.id, expires
-            await provider.update_user(sub.vpn_username, int(expires.timestamp()), traffic)
-            await provider.enable_user(sub.vpn_username)
+            await client.update_user(sub.vpn_username, int(expires.timestamp()), traffic)
+            await client.enable_user(sub.vpn_username)
             raw = None
         sub.status, sub.provisioning_error = SubscriptionStatus.ACTIVE, None
         await db.commit()

@@ -26,7 +26,7 @@ async def seed():
                 Plan(name="HAVA Pro", slug="pro", description="Максимум возможностей", price_stars=699, duration_days=30, traffic_limit_gb=None, device_limit=5, sort_order=3),
             ])
         if not await db.scalar(select(Node.id).limit(1)):
-            db.add(Node(name="HAVA Germany 01", country="DE", city="Frankfurt", hostname="vpn.example.com", provider="mock", status="ONLINE", load="low"))
+            db.add(Node(name="HAVA Germany 01", country="DE", city="Frankfurt", hostname="vpn.example.com", status="ONLINE", load="low"))
         await db.commit()
 
 
@@ -73,4 +73,3 @@ async def telegram_webhook(secret: str, request: Request, x_telegram_bot_api_sec
         raise HTTPException(403)
     await dp.feed_update(bot, Update.model_validate(await request.json()))
     return {"ok": True}
-

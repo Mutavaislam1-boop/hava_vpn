@@ -10,10 +10,9 @@ class Settings(BaseSettings):
     public_url: str = "http://localhost:8000"
     webhook_secret: str = "change-me"
     admin_token: str = "change-me"
-    vpn_provider: str = "mock"
-    marzban_url: str = ""
-    marzban_username: str = ""
-    marzban_password: str = ""
+    vpn_api_url: str = ""
+    vpn_api_key: str = ""
+    vpn_api_auth_header: str = "Authorization"
     cors_origins: str = "http://localhost:8000"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

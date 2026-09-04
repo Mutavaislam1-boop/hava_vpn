@@ -1,3 +1,3 @@
-from app.vpn.factory import get_vpn_provider
-__all__ = ["get_vpn_provider"]
+from app.vpn.client import VpnApiClient, VpnApiError, get_vpn_client
 
+__all__ = ["VpnApiClient", "VpnApiError", "get_vpn_client"]
