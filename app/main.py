@@ -25,7 +25,7 @@ def design(title: str, body: str) -> str:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 </pre>
 
-<a href="https://t.me/hava_vpn_bot">🔗 Открыть HAVA VPN</a>
+<a href="https://t.me/hava_vpn_bot">🔗 HAVA VPN</a>
 """
 
 
