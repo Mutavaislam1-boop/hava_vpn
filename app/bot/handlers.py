@@ -30,9 +30,12 @@ def design(title: str, body: str) -> str:
 {body}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-</pre>
+
 
 <a href="https://t.me/hava_vpn_bot">🔗 Открыть HAVA VPN</a>
+</pre>
+
+
 """.strip()
 
 
