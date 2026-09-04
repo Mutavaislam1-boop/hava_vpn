@@ -2,7 +2,7 @@ import io
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.api.deps import telegram_user
@@ -13,6 +13,21 @@ from app.db.session import get_db
 from app.services.subscriptions import current_subscription, rotate_token
 
 router = APIRouter(prefix="/api")
+
+
+@router.get("/diagnostics")
+async def diagnostics(user: User = Depends(telegram_user), db: AsyncSession = Depends(get_db)):
+    await db.execute(text("SELECT 1"))
+    settings = get_settings()
+    return {
+        "telegram": "ONLINE",
+        "backend": "ONLINE",
+        "database": "ONLINE",
+        "vpn": settings.vpn_diagnostic_status,
+        "mini_app": "READY" if settings.mini_app_ready else "NOT_CONFIGURED",
+        "telegram_id": user.telegram_id,
+        "username": user.username,
+    }
 
 
 @router.get("/plans")

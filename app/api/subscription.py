@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 from app.core.telegram import token_hash
 from app.db.base import Subscription, SubscriptionStatus, SubscriptionToken
 from app.db.session import get_db

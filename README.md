@@ -17,7 +17,7 @@ MVP единой системы продажи VPN-доступа: Telegram-бо
 
 ## Локальный запуск
 
-Требуется Python 3.9+ (для production используется Python 3.12 из Dockerfile).
+Требуется Python 3.9+.
 
 ```bash
 python3 -m venv .venv
@@ -28,11 +28,13 @@ python run.py
 
 Откройте `http://localhost:8000/health`. При локальном `PUBLIC_URL` бот сам запускается через long polling. Mini App авторизуется только внутри Telegram; это ожидаемое ограничение безопасности.
 
-## Docker / PostgreSQL
+## Диагностический режим
 
-```bash
-docker compose up --build
-```
+- `/start` и `/status` показывают состояние Telegram, backend, базы, VPN API и Mini App;
+- при запуске выполняется Telegram `getMe()` и в терминал выводятся реальные username и ID бота;
+- ожидаемый username задаётся через `EXPECTED_BOT_USERNAME`;
+- HTTPS-адрес Mini App задаётся отдельно через `MINI_APP_URL`;
+- без HTTPS команда `/start` продолжает работать и показывает предупреждение вместо Web App-кнопки.
 
 Для Telegram Mini App нужен публичный HTTPS URL. Укажите его в `PUBLIC_URL`, настройте URL Mini App через BotFather и установите webhook:
 

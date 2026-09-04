@@ -3,16 +3,31 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>HAVA VPN</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/diagnostic.css">
 </head>
 <body>
   <div class="air air-a"></div><div class="air air-b"></div>
   <main>
+    <div class="dev-banner">HAVA VPN — DEVELOPMENT MODE</div>
     <header><div class="brand"><span class="logo">H</span><div><b>HAVA VPN</b><small>свобода в каждом соединении</small></div></div><button class="icon" id="close">×</button></header>
     <section id="home" class="screen active">
+      <div class="diagnostic-panel">
+        <b>✅ Telegram authorization successful</b>
+        <b>✅ Backend connected</b>
+        <b>✅ Database connected</b>
+        <b id="vpnDiagnostic">🟡 VPN: MOCK MODE</b>
+      </div>
+      <div class="system-card">
+        <div class="system-mark">🌬</div><h1>HAVA VPN</h1><h2>Система работает</h2>
+        <p>Telegram user: <b id="homeUsername">—</b><br>ID: <b id="homeTelegramId">—</b></p>
+        <div class="indicators"><span>Telegram — ✅</span><span>Backend — ✅</span><span>Database — ✅</span><span id="vpnIndicator">VPN — 🟡 MOCK</span></div>
+      </div>
       <div class="status-wrap"><div class="orbit o1"></div><div class="orbit o2"></div><button class="power" id="power"><span class="wind">≈</span><strong>HAVA</strong><small id="state">VPN не подключён</small></button></div>
       <div id="summary" class="summary"><b>Ваше личное пространство</b><span>Быстрый доступ без сложных настроек</span></div>
       <button class="primary" id="getVpn">Получить VPN <span>→</span></button>
+      <button class="secondary" id="systemCheck">Проверить систему</button>
+      <button class="secondary" id="openPlans">Тарифы</button>
+      <button class="secondary" id="openSubscription">Моя подписка</button>
       <p class="hint">Подключение происходит в приложении Happ</p>
     </section>
     <section id="plans" class="screen"><div class="eyebrow">ВЫБЕРИТЕ СВОБОДУ</div><h1>Тарифы HAVA</h1><p class="muted">Оплата Telegram Stars. Доступ появится автоматически.</p><div id="planList" class="cards"></div></section>
@@ -23,4 +38,3 @@
   <div class="toast" id="toast"></div>
   <script src="/static/app.js"></script>
 </body></html>
-
