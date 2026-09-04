@@ -21,6 +21,9 @@ user_languages: dict[int, str] = {}
 def design(title: str, body: str) -> str:
     return f"""
 <pre>
+
+
+<a href="https://t.me/hava_vpn_bot">🔗 Открыть HAVA VPN</a>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🌬 HAVA VPN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -31,8 +34,6 @@ def design(title: str, body: str) -> str:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-
-<a href="https://t.me/hava_vpn_bot">🔗 Открыть HAVA VPN</a>
 </pre>
 
 
