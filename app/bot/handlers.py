@@ -1,191 +1,202 @@
 from aiogram import F, Router
-from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message, PreCheckoutQuery, ReplyKeyboardMarkup, WebAppInfo
-from sqlalchemy import select, text
-from sqlalchemy.orm import selectinload
-from app.bot.instance import bot
-from app.bot.diagnostics import runtime
+from aiogram.filters import CommandStart
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    Message,
+    ReplyKeyboardMarkup,
+    WebAppInfo,
+)
+
 from app.core.config import get_settings
-from app.db.base import Order, OrderStatus, Payment, Plan, Subscription, User
-from app.db.session import SessionLocal
-from app.services.subscriptions import provision
-from app.services.users import get_or_create_user
 
 router = Router()
 
+WELCOME_TEXT = """<b>🌬 HAVA VPN</b>
+Свобода в каждом соединении.
 
-def webapp_keyboard():
-    settings = get_settings()
+HAVA VPN — сервис для быстрого и удобного подключения к VPN прямо через Telegram.
+
+Что будет доступно:
+• покупка VPN-подписки;
+• управление сроком подписки;
+• получение персонального VPN-доступа;
+• подключение через Happ;
+• управление аккаунтом;
+• помощь и поддержка.
+
+Выберите нужный раздел ниже."""
+
+PLANS_TEXT = """<b>🌬 HAVA VPN</b>
+Управление подпиской
+
+Выберите срок подписки:"""
+
+MONTH_TEXT = """<b>🌬 HAVA VPN</b>
+<b>Подписка на 1 месяц</b>
+
+Срок: 30 дней
+Статус: доступно
+
+Оплату подключим следующим этапом."""
+
+YEAR_TEXT = """<b>🌬 HAVA VPN</b>
+<b>Годовая подписка</b>
+
+Срок: 365 дней
+Статус: доступно
+
+Оплату подключим следующим этапом."""
+
+LANGUAGE_TEXT = "<b>🌐 Выберите язык</b>"
+
+user_languages: dict[int, str] = {}
+
+
+def reply_menu() -> ReplyKeyboardMarkup:
     rows = []
-    if settings.mini_app_ready:
-        rows.append([KeyboardButton(text="🌬 Открыть HAVA VPN", web_app=WebAppInfo(url=settings.resolved_mini_app_url))])
-    else:
-        rows.append([KeyboardButton(text="⚠️ Mini App ещё не подключён к HTTPS")])
-    rows.extend([[KeyboardButton(text="💎 Тарифы"), KeyboardButton(text="🔑 Моя подписка")], [KeyboardButton(text="📱 Устройства"), KeyboardButton(text="❓ Помощь")]])
-    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+    mini_app_url = get_settings().mini_app_url.strip()
+    if mini_app_url.startswith("https://"):
+        rows.append([KeyboardButton(text="🌬 Открыть HAVA VPN", web_app=WebAppInfo(url=mini_app_url))])
+    rows.extend(
+        [
+            [KeyboardButton(text="👤 Мой кабинет"), KeyboardButton(text="🛍 Магазин")],
+            [KeyboardButton(text="❓ Помощь"), KeyboardButton(text="ℹ️ О боте")],
+        ]
+    )
+    return ReplyKeyboardMarkup(
+        keyboard=rows,
+        resize_keyboard=True,
+        is_persistent=True,
+    )
 
 
-def diagnostic_keyboard():
-    settings = get_settings()
-    rows = []
-    if settings.mini_app_ready:
-        rows.append([InlineKeyboardButton(text="🌬 Открыть HAVA VPN", web_app=WebAppInfo(url=settings.resolved_mini_app_url))])
-    else:
-        rows.append([InlineKeyboardButton(text="⚠️ Mini App ещё не подключён к HTTPS", callback_data="diag:no_webapp")])
-    rows.extend([
-        [InlineKeyboardButton(text="🧪 Проверить backend", callback_data="diag:backend")],
-        [InlineKeyboardButton(text="👤 Мой профиль", callback_data="diag:profile")],
-    ])
+def home_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🌬 HAVA VPN", callback_data="hava:plans")],
+            [InlineKeyboardButton(text="🌐 Язык", callback_data="hava:language")],
+        ]
+    )
+
+
+def plans_keyboard(with_back: bool = True) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text="📅 1 месяц", callback_data="hava:month")],
+        [InlineKeyboardButton(text="⭐ 1 год", callback_data="hava:year")],
+    ]
+    if with_back:
+        rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="hava:home")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def database_online() -> bool:
-    try:
-        async with SessionLocal() as db:
-            await db.execute(text("SELECT 1"))
-        runtime.database_ready = True
-    except Exception:
-        runtime.database_ready = False
-    return runtime.database_ready
+def plan_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Купить", callback_data="hava:buy")],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="hava:plans")],
+        ]
+    )
 
 
-def system_status_text(database_ready: bool) -> str:
-    settings = get_settings()
-    return (
-        "<b>✅ HAVA SYSTEM TEST</b>\n\n"
-        "Telegram Bot: ONLINE\n"
-        f"Backend API: {'ONLINE' if runtime.backend_ready else 'STARTING'}\n"
-        f"Database: {'ONLINE' if database_ready else 'OFFLINE'}\n"
-        f"VPN Provider: {settings.vpn_diagnostic_status}\n"
-        f"Mini App URL: {'READY' if settings.mini_app_ready else 'NOT CONFIGURED'}"
+def language_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:Русский")],
+            [InlineKeyboardButton(text="🇬🇧 English", callback_data="lang:English")],
+            [InlineKeyboardButton(text="🇸🇦 العربية", callback_data="lang:العربية")],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="hava:home")],
+        ]
     )
 
 
 @router.message(CommandStart())
-async def start(message: Message, command: CommandObject):
-    settings = get_settings()
-    text_value = (
-        "<b>🌬 HAVA VPN</b>\n\n"
-        "<b>✅ Telegram Bot подключён</b>\n"
-        "Бот успешно работает и связан с backend.\n\n"
-        f"Telegram ID: <code>{message.from_user.id}</code>\n"
-        "Backend: ONLINE\n"
-        f"VPN Provider: {settings.vpn_diagnostic_status}\n"
-        "Version: MVP TEST"
+async def start(message: Message):
+    await message.answer(WELCOME_TEXT, reply_markup=home_keyboard())
+    await message.answer("Главное меню HAVA VPN", reply_markup=reply_menu())
+
+
+@router.callback_query(F.data == "hava:home")
+async def open_home(callback: CallbackQuery):
+    await callback.message.edit_text(WELCOME_TEXT, reply_markup=home_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "hava:plans")
+async def open_plans(callback: CallbackQuery):
+    await callback.message.edit_text(PLANS_TEXT, reply_markup=plans_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "hava:month")
+async def open_month(callback: CallbackQuery):
+    await callback.message.edit_text(MONTH_TEXT, reply_markup=plan_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "hava:year")
+async def open_year(callback: CallbackQuery):
+    await callback.message.edit_text(YEAR_TEXT, reply_markup=plan_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "hava:buy")
+async def buy_placeholder(callback: CallbackQuery):
+    await callback.answer("Оплата HAVA VPN будет подключена следующим этапом.", show_alert=True)
+
+
+@router.callback_query(F.data == "hava:language")
+async def open_language(callback: CallbackQuery):
+    await callback.message.edit_text(LANGUAGE_TEXT, reply_markup=language_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("lang:"))
+async def select_language(callback: CallbackQuery):
+    language = callback.data.split(":", 1)[1]
+    user_languages[callback.from_user.id] = language
+    await callback.message.edit_text(
+        f"<b>✅ Язык выбран: {language}</b>",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data="hava:home")]]
+        ),
     )
-    await message.answer(text_value, reply_markup=diagnostic_keyboard())
-    try:
-        async with SessionLocal() as db:
-            ref = None
-            if command.args and command.args.startswith("ref_"):
-                try: ref = int(command.args[4:])
-                except ValueError: pass
-            await get_or_create_user(db, message.from_user.model_dump(), ref)
-    except Exception:
-        # Diagnostics must answer even while the database is unavailable.
-        runtime.database_ready = False
-
-
-@router.message(Command("status"))
-async def status(message: Message):
-    await message.answer(system_status_text(await database_online()), reply_markup=diagnostic_keyboard())
-
-
-@router.callback_query(F.data == "diag:backend")
-async def check_backend(callback: CallbackQuery):
-    await callback.message.answer(system_status_text(await database_online()))
-    await callback.answer("Проверка завершена")
-
-
-@router.callback_query(F.data == "diag:no_webapp")
-async def no_webapp(callback: CallbackQuery):
-    await callback.answer("Укажите HTTPS-адрес в MINI_APP_URL", show_alert=True)
-
-
-@router.callback_query(F.data == "diag:profile")
-async def diagnostic_profile(callback: CallbackQuery):
-    try:
-        async with SessionLocal() as db:
-            user = await get_or_create_user(db, callback.from_user.model_dump())
-        await callback.message.answer(f"<b>👤 Профиль HAVA</b>\n\nHAVA ID: #{user.id}\nTelegram ID: <code>{user.telegram_id}</code>\nUsername: @{user.username or 'не указан'}")
-    except Exception:
-        await callback.message.answer("Профиль временно недоступен, но Telegram Bot и backend работают.")
     await callback.answer()
 
 
-@router.message(F.text == "⚠️ Mini App ещё не подключён к HTTPS")
-async def mini_app_not_ready(message: Message):
-    await message.answer("⚠️ Mini App ещё не подключён к HTTPS. Укажите публичный адрес в MINI_APP_URL.")
+@router.message(F.text == "👤 Мой кабинет")
+async def cabinet(message: Message):
+    await message.answer(
+        "<b>👤 Мой кабинет</b>\n\n"
+        f"Telegram ID: <code>{message.from_user.id}</code>\n"
+        "Подписка: не активна\n"
+        "Срок действия: —\n"
+        "VPN: не подключён\n"
+        "Статус проекта: тестовый режим"
+    )
 
 
-@router.message(Command("paysupport"))
-async def paysupport(message: Message):
-    await message.answer("По вопросам оплаты напишите в поддержку через HAVA VPN → Профиль → Поддержка. Укажите дату платежа и Telegram ID, но не отправляйте пароли или коды.")
+@router.message(F.text == "🛍 Магазин")
+async def shop(message: Message):
+    await message.answer("<b>🛍 Магазин HAVA VPN</b>\n\nВыберите подписку:", reply_markup=plans_keyboard(with_back=False))
 
 
-@router.message(F.text == "💎 Тарифы")
-async def show_plans(message: Message):
-    async with SessionLocal() as db:
-        plans = (await db.scalars(select(Plan).where(Plan.is_active).order_by(Plan.sort_order))).all()
-    rows = [[InlineKeyboardButton(text=f"{p.name} — {p.price_stars} ⭐", callback_data=f"buy:{p.id}")] for p in plans]
-    await message.answer("Выберите тариф HAVA:", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+@router.message(F.text == "❓ Помощь")
+async def help_section(message: Message):
+    await message.answer(
+        "<b>❓ Помощь HAVA VPN</b>\n\n"
+        "Если у вас возникли проблемы с подключением, оплатой или подпиской, обратитесь в поддержку.\n\n"
+        "Поддержка будет подключена следующим этапом."
+    )
 
 
-@router.callback_query(F.data.startswith("buy:"))
-async def buy(callback):
-    plan_id = int(callback.data.split(":")[1])
-    async with SessionLocal() as db:
-        user = await get_or_create_user(db, callback.from_user.model_dump())
-        plan = await db.get(Plan, plan_id)
-        if not plan or not plan.is_active:
-            return await callback.answer("Тариф недоступен", show_alert=True)
-        order = Order(user_id=user.id, plan_id=plan.id, amount=plan.price_stars)
-        db.add(order); await db.commit(); await db.refresh(order)
-    await bot.send_invoice(callback.from_user.id, title=plan.name, description=f"HAVA VPN на {plan.duration_days} дней", payload=f"order:{order.id}", currency="XTR", prices=[{"label": plan.name, "amount": plan.price_stars}])
-    await callback.answer()
-
-
-@router.pre_checkout_query()
-async def checkout(query: PreCheckoutQuery):
-    ok, error = False, "Заказ не найден"
-    try:
-        order_id = int(query.invoice_payload.split(":")[1])
-        async with SessionLocal() as db:
-            order = await db.get(Order, order_id)
-            user = await db.get(User, order.user_id) if order else None
-            ok = bool(order and user and user.telegram_id == query.from_user.id and order.status == OrderStatus.PENDING and order.amount == query.total_amount and query.currency == "XTR")
-            if not ok: error = "Параметры заказа изменились. Создайте новый заказ."
-    except Exception:
-        pass
-    await query.answer(ok=ok, error_message=None if ok else error)
-
-
-@router.message(F.successful_payment)
-async def paid(message: Message):
-    payment = message.successful_payment
-    order_id = int(payment.invoice_payload.split(":")[1])
-    async with SessionLocal() as db:
-        duplicate = await db.scalar(select(Payment).where(Payment.telegram_payment_charge_id == payment.telegram_payment_charge_id))
-        if duplicate:
-            return
-        order = await db.scalar(select(Order).options(selectinload(Order.plan)).where(Order.id == order_id))
-        user = await db.get(User, order.user_id) if order else None
-        if not order or not user or user.telegram_id != message.from_user.id or order.amount != payment.total_amount:
-            return await message.answer("Платёж получен, но заказ требует ручной проверки. Напишите /paysupport.")
-        db.add(Payment(order_id=order.id, telegram_payment_charge_id=payment.telegram_payment_charge_id, provider_payment_id=payment.provider_payment_charge_id, amount=payment.total_amount, currency=payment.currency, raw_reference=payment.model_dump(mode="json")))
-        order.status, order.provisioning_status = OrderStatus.PAID, "PENDING"
-        await db.commit()
-        await message.answer("Платёж получен ✅\nHAVA настраивается. Обычно это занимает несколько секунд.")
-        try:
-            _, raw_token = await provision(db, user, order.plan)
-            order.provisioning_status = "READY"; await db.commit()
-            link = f"{get_settings().public_url}/s/{raw_token}" if raw_token else get_settings().public_url
-            await message.answer(f"HAVA готов ✅\nОткройте кабинет, чтобы подключиться.\n{link}", reply_markup=webapp_keyboard())
-        except Exception:
-            order.provisioning_status = "PENDING"; await db.commit()
-            await message.answer("Настройка задерживается. Платёж сохранён — система повторит создание доступа.")
-
-
-@router.message(F.text.in_({"🔑 Моя подписка", "📱 Устройства", "❓ Помощь"}))
-async def open_app(message: Message):
-    await message.answer("Откройте кабинет HAVA:", reply_markup=webapp_keyboard())
+@router.message(F.text == "ℹ️ О боте")
+async def about(message: Message):
+    await message.answer(
+        "<b>ℹ️ HAVA VPN</b>\n\n"
+        "HAVA VPN — Telegram-сервис для покупки и управления VPN-подпиской.\n\n"
+        "После покупки пользователь получает персональную ссылку или ключ и подключает VPN через Happ.\n\n"
+        "HAVA означает «воздух» — идея бренда связана со свободой, лёгкостью и свободным доступом к интернету."
+    )

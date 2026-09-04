@@ -1,40 +1,24 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>HAVA VPN</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/diagnostic.css">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#06101f">
+  <title>HAVA VPN</title><script src="https://telegram.org/js/telegram-web-app.js"></script><link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <div class="air air-a"></div><div class="air air-b"></div>
-  <main>
-    <div class="dev-banner">HAVA VPN — DEVELOPMENT MODE</div>
-    <header><div class="brand"><span class="logo">H</span><div><b>HAVA VPN</b><small>свобода в каждом соединении</small></div></div><button class="icon" id="close">×</button></header>
-    <section id="home" class="screen active">
-      <div class="diagnostic-panel">
-        <b>✅ Telegram authorization successful</b>
-        <b>✅ Backend connected</b>
-        <b>✅ Database connected</b>
-        <b id="vpnDiagnostic">🟡 VPN: MOCK MODE</b>
-      </div>
-      <div class="system-card">
-        <div class="system-mark">🌬</div><h1>HAVA VPN</h1><h2>Система работает</h2>
-        <p>Telegram user: <b id="homeUsername">—</b><br>ID: <b id="homeTelegramId">—</b></p>
-        <div class="indicators"><span>Telegram — ✅</span><span>Backend — ✅</span><span>Database — ✅</span><span id="vpnIndicator">VPN — 🟡 MOCK</span></div>
-      </div>
-      <div class="status-wrap"><div class="orbit o1"></div><div class="orbit o2"></div><button class="power" id="power"><span class="wind">≈</span><strong>HAVA</strong><small id="state">VPN не подключён</small></button></div>
-      <div id="summary" class="summary"><b>Ваше личное пространство</b><span>Быстрый доступ без сложных настроек</span></div>
-      <button class="primary" id="getVpn">Получить VPN <span>→</span></button>
-      <button class="secondary" id="systemCheck">Проверить систему</button>
-      <button class="secondary" id="openPlans">Тарифы</button>
-      <button class="secondary" id="openSubscription">Моя подписка</button>
-      <p class="hint">Подключение происходит в приложении Happ</p>
-    </section>
-    <section id="plans" class="screen"><div class="eyebrow">ВЫБЕРИТЕ СВОБОДУ</div><h1>Тарифы HAVA</h1><p class="muted">Оплата Telegram Stars. Доступ появится автоматически.</p><div id="planList" class="cards"></div></section>
-    <section id="vpn" class="screen"><div class="eyebrow">МОЙ VPN</div><h1>Подписка</h1><div id="vpnCard" class="glass empty">Активной подписки пока нет</div><button class="primary" id="copyLink" hidden>Скопировать ссылку</button><button class="secondary" id="rotate" hidden>Перевыпустить ссылку</button></section>
-    <section id="profile" class="screen"><div class="eyebrow">ПРОФИЛЬ</div><h1 id="profileName">HAVA ID</h1><div class="glass rows"><div><span>Telegram</span><b id="tgName">—</b></div><div><span>Статус</span><b id="profileStatus">Нет подписки</b></div></div><button class="secondary" id="support">Написать в поддержку</button><p class="privacy">HAVA не хранит историю посещений, DNS-запросы и содержимое вашего трафика.</p></section>
-  </main>
-  <nav><button data-tab="home" class="on"><i>⌁</i>Главная</button><button data-tab="plans"><i>◇</i>Тарифы</button><button data-tab="vpn"><i>◉</i>VPN</button><button data-tab="profile"><i>○</i>Профиль</button></nav>
-  <div class="toast" id="toast"></div>
-  <script src="/static/app.js"></script>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <div class="app-shell">
+    <header class="topbar"><div class="identity"><img src="/static/assets/hava-logo.png" alt="HAVA"><div><b>HAVA VPN</b><span>Свобода в каждом соединении</span></div></div><button class="round-button" id="themeButton" aria-label="Сменить тему">☾</button></header>
+    <main>
+      <section class="page active" data-page="home">
+        <div class="status-line"><span>VPN STATUS</span><b><i></i> Неактивен</b></div>
+        <article class="hero glass"><div class="logo-orbit"><span class="orbit"></span><img src="/static/assets/hava-logo.png" alt="Логотип HAVA VPN"></div><p class="eyebrow">🌬 HAVA VPN</p><h1>Свобода<br>в каждом соединении</h1><p class="hero-copy">Лёгкий и безопасный доступ к интернету прямо из Telegram.</p><div class="inactive-card"><span class="status-icon">○</span><div><b>Подписка не активна</b><small>Выберите подходящий тариф для начала</small></div></div><button class="primary" data-go="plans">Выбрать тариф <span>↗</span></button></article>
+        <div class="feature-row"><div class="mini-card"><span>⚡</span><b>Быстро</b><small>Без сложных настроек</small></div><div class="mini-card"><span>◈</span><b>Защищённо</b><small>Приватное соединение</small></div></div>
+      </section>
+      <section class="page" data-page="plans"><div class="section-heading"><span class="eyebrow">ПОДПИСКА</span><h2>Выберите свой HAVA</h2><p>Простые тарифы без скрытых условий.</p></div><div id="plansList" class="plan-list"><div class="skeleton"></div><div class="skeleton"></div></div></section>
+      <section class="page" data-page="vpn"><div class="section-heading"><span class="eyebrow">ПОДКЛЮЧЕНИЕ</span><h2>Мой VPN</h2><p>Управляйте персональным доступом HAVA.</p></div><article class="empty-state glass"><div class="empty-logo"><img src="/static/assets/hava-logo.png" alt=""></div><h3>VPN пока не активирован</h3><p>После покупки здесь появятся ссылка, QR-код и кнопка подключения через Happ.</p><button class="primary" data-go="plans">Активировать после покупки</button></article><div class="action-grid"><button disabled>↗ Открыть в Happ</button><button disabled>▣ Скопировать ссылку</button><button disabled>▦ Показать QR</button><button disabled>↻ Обновить</button></div></section>
+      <section class="page" data-page="profile"><div class="profile-head glass"><div class="avatar" id="avatar">H</div><div><span class="eyebrow">HAVA ID</span><h2 id="havaId">—</h2><p id="telegramName">Telegram</p></div></div><article class="glass details"><div><span>Telegram ID</span><b id="telegramId">—</b></div><div><span>Текущий тариф</span><b>Не активен</b></div><div><span>Дата окончания</span><b>—</b></div><div><span>Устройства</span><b>0</b></div><div><span>Статус</span><b class="danger">Неактивен</b></div></article><div class="settings-list glass"><button data-modal="language"><span>🌐 Язык</span><i>Русский ›</i></button><button data-modal="support"><span>◌ Поддержка</span><i>›</i></button><button data-modal="about"><span>ⓘ О HAVA VPN</span><i>›</i></button><button data-modal="privacy"><span>◇ Политика конфиденциальности</span><i>›</i></button><button data-modal="terms"><span>▤ Условия использования</span><i>›</i></button></div></section>
+    </main>
+    <nav class="bottom-nav"><button class="active" data-go="home"><i>⌂</i><span>Главная</span></button><button data-go="plans"><i>◇</i><span>Тарифы</span></button><button data-go="vpn"><i>◉</i><span>VPN</span></button><button data-go="profile"><i>○</i><span>Профиль</span></button></nav>
+  </div>
+  <div class="modal-backdrop" id="modalBackdrop"><div class="modal-sheet"><span class="handle"></span><button class="modal-close" aria-label="Закрыть">×</button><div id="modalContent"></div></div></div><div class="toast" id="toast"></div><script src="/static/app.js"></script>
 </body></html>
