@@ -1,593 +1,192 @@
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
-from aiogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    KeyboardButton,
-    Message,
-    ReplyKeyboardMarkup,
-    WebAppInfo,
-)
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, LinkPreviewOptions, Message, ReplyKeyboardMarkup, WebAppInfo
 
 from app.core.config import get_settings
 
-
 router = Router()
 
+BOT_URL = "https://t.me/hava_vpn_bot"
+PRIVACY_POLICY_URL = "https://havavpn.com/privacy"
+TERMS_URL = "https://havavpn.com/terms"
+
+MONTH_PRICES = {"RUB": "360 ₽", "USD": "$4", "KZT": "2 100 ₸"}
+YEAR_PRICES = {"RUB": "4 999 ₽", "USD": "$55", "KZT": "29 000 ₸"}
+CURRENCY_CYCLE = {"RUB": "USD", "USD": "KZT", "KZT": "RUB"}
+CURRENCY_BUTTONS = {"RUB": "$ USD", "USD": "₸ KZT", "KZT": "₽ RUB"}
+
 user_languages: dict[int, str] = {}
-
-
-def design(title: str, body: str) -> str:
-    return f"""
-<pre>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🌬 HAVA VPN
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏷 {title}
-
-{body}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-</pre>
-<a href="https://t.me/hava_vpn_bot"> HAVA VPN</a>
-""".strip()
+user_currencies: dict[int, str] = {}
 
 
 def get_language(user_id: int) -> str:
     return user_languages.get(user_id, "ru")
 
 
-def reply_menu() -> ReplyKeyboardMarkup:
-    rows = []
+def mini_app_url(**params: str) -> str:
+    parts = urlsplit(get_settings().mini_app_url.strip())
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.update(params)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
-    mini_app_url = get_settings().mini_app_url.strip()
 
-    if mini_app_url.startswith("https://"):
-        rows.append(
-            [
-                KeyboardButton(
-                    text="🌬 Открыть HAVA VPN",
-                    web_app=WebAppInfo(url=mini_app_url),
-                )
-            ]
+def link_preview() -> LinkPreviewOptions:
+    return LinkPreviewOptions(is_disabled=False, url=BOT_URL, prefer_large_media=False, show_above_text=True)
+
+
+def main_text(language: str, subscription: bool = False) -> str:
+    if language == "en":
+        title = "Subscription" if subscription else "Welcome"
+        return (
+            f'<a href="{BOT_URL}"><b>🌬 HAVA VPN</b></a>\n<b>{title}</b>\n\n'
+            "Freedom in every connection.\n\n"
+            "HAVA VPN is a service for fast and convenient VPN access directly through Telegram.\n\n"
+            "Available features:\n• VPN subscription purchase;\n• subscription period management;\n"
+            "• personal VPN access;\n• connection through Happ;\n• account management;\n• help and support.\n\n"
+            + ("Choose a subscription period below." if subscription else "Choose a section below.")
         )
 
-    rows.extend(
-        [
-            [
-                KeyboardButton(text="👤 Мой кабинет"),
-                KeyboardButton(text="🛍 Магазин"),
-            ],
-            [
-                KeyboardButton(text="❓ Помощь"),
-                KeyboardButton(text="ℹ️ О боте"),
-            ],
-        ]
+    title = "Подписка" if subscription else "Добро пожаловать"
+    return (
+        f'<a href="{BOT_URL}"><b>🌬 HAVA VPN</b></a>\n<b>{title}</b>\n\n'
+        "Свобода в каждом соединении.\n\n"
+        "HAVA VPN — сервис для быстрого и удобного подключения к VPN прямо через Telegram.\n\n"
+        "Что будет доступно:\n• покупка VPN-подписки;\n• управление сроком подписки;\n"
+        "• получение персонального VPN-доступа;\n• подключение через Happ;\n• управление аккаунтом;\n• помощь и поддержка.\n\n"
+        + ("Выберите срок подписки ниже." if subscription else "Выберите нужный раздел ниже.")
     )
 
+
+def reply_menu() -> ReplyKeyboardMarkup:
+    shop_button = KeyboardButton(text="🛍 Магазин")
+    if get_settings().mini_app_url.strip().startswith("https://"):
+        shop_button = KeyboardButton(text="🛍 Магазин", web_app=WebAppInfo(url=mini_app_url(section="shop")))
     return ReplyKeyboardMarkup(
-        keyboard=rows,
+        keyboard=[
+            [KeyboardButton(text="👤 Мой кабинет"), shop_button],
+            [KeyboardButton(text="❓ Помощь"), KeyboardButton(text="ℹ️ О боте")],
+        ],
         resize_keyboard=True,
         is_persistent=True,
     )
 
 
-def home_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
-    if language == "en":
-        return InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="🌬 HAVA VPN",
-                        callback_data="hava:plans",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="🌐 Language",
-                        callback_data="hava:language",
-                    )
-                ],
-            ]
-        )
-
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🌬 HAVA VPN",
-                    callback_data="hava:plans",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🌐 Язык",
-                    callback_data="hava:language",
-                )
-            ],
-        ]
-    )
+def home_keyboard(language: str) -> InlineKeyboardMarkup:
+    language_label = "🌐 Language" if language == "en" else "🌐 Язык"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌬 HAVA VPN", callback_data="hava:plans")],
+        [InlineKeyboardButton(text=language_label, callback_data="hava:language")],
+    ])
 
 
-def plans_keyboard(
-    language: str = "ru",
-    with_back: bool = True,
-) -> InlineKeyboardMarkup:
-
-    if language == "en":
-        rows = [
-            [
-                InlineKeyboardButton(
-                    text="📅 1 month",
-                    callback_data="hava:month",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="⭐ 1 year",
-                    callback_data="hava:year",
-                )
-            ],
-        ]
-
-        if with_back:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text="⬅️ Back",
-                        callback_data="hava:home",
-                    )
-                ]
-            )
-
-    else:
-        rows = [
-            [
-                InlineKeyboardButton(
-                    text="📅 1 месяц",
-                    callback_data="hava:month",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="⭐ 1 год",
-                    callback_data="hava:year",
-                )
-            ],
-        ]
-
-        if with_back:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text="⬅️ Назад",
-                        callback_data="hava:home",
-                    )
-                ]
-            )
-
-    return InlineKeyboardMarkup(
-        inline_keyboard=rows
-    )
+def language_keyboard(language: str) -> InlineKeyboardMarkup:
+    back = "⬅️ Back" if language == "en" else "⬅️ Назад"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:ru"), InlineKeyboardButton(text="🇬🇧 English", callback_data="lang:en")],
+        [InlineKeyboardButton(text=back, callback_data="hava:home")],
+    ])
 
 
-def plan_keyboard(
-    language: str = "ru",
-) -> InlineKeyboardMarkup:
-
-    if language == "en":
-        return InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="💳 Buy",
-                        callback_data="hava:buy",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="⬅️ Back",
-                        callback_data="hava:plans",
-                    )
-                ],
-            ]
-        )
-
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="💳 Купить",
-                    callback_data="hava:buy",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="⬅️ Назад",
-                    callback_data="hava:plans",
-                )
-            ],
-        ]
-    )
+def plans_keyboard(user_id: int, language: str) -> InlineKeyboardMarkup:
+    currency = user_currencies.setdefault(user_id, "RUB")
+    month = "1 month" if language == "en" else "1 месяц"
+    year = "1 year" if language == "en" else "1 год"
+    back = "⬅️ Back" if language == "en" else "⬅️ Назад"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"📅 {month} — {MONTH_PRICES[currency]}", web_app=WebAppInfo(url=mini_app_url(plan="month")))],
+        [InlineKeyboardButton(text=f"⭐ {year} — {YEAR_PRICES[currency]}", web_app=WebAppInfo(url=mini_app_url(plan="year")))],
+        [InlineKeyboardButton(text=back, callback_data="hava:home"), InlineKeyboardButton(text=CURRENCY_BUTTONS[currency], callback_data="hava:currency")],
+    ])
 
 
-def language_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🇷🇺 Русский",
-                    callback_data="lang:ru",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🇬🇧 English",
-                    callback_data="lang:en",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="⬅️ Назад",
-                    callback_data="hava:home",
-                )
-            ],
-        ]
-    )
-
-
-def welcome_text(language: str) -> str:
-    if language == "en":
-        return design(
-            "Welcome",
-            (
-                "Freedom in every connection.\n\n"
-                "HAVA VPN is a simple Telegram service "
-                "for purchasing and managing VPN access.\n\n"
-                "Available features:\n"
-                "• VPN subscription purchase\n"
-                "• subscription management\n"
-                "• personal VPN access\n"
-                "• connection through Happ\n"
-                "• account management\n"
-                "• user support\n\n"
-                "Choose a section below."
-            ),
-        )
-
-    return design(
-        "Добро пожаловать",
-        (
-            "Свобода в каждом соединении.\n\n"
-            "HAVA VPN — сервис для быстрого "
-            "и удобного подключения к VPN через Telegram.\n\n"
-            "Что доступно:\n"
-            "• покупка VPN-подписки\n"
-            "• управление сроком подписки\n"
-            "• персональный VPN-доступ\n"
-            "• подключение через Happ\n"
-            "• управление аккаунтом\n"
-            "• помощь и поддержка\n\n"
-            "Выберите нужный раздел ниже."
-        ),
-    )
-
-
-def plans_text(language: str) -> str:
-    if language == "en":
-        return design(
-            "Subscription",
-            (
-                "Choose your HAVA VPN subscription.\n\n"
-                "📅 1 month\n"
-                "⭐ 1 year"
-            ),
-        )
-
-    return design(
-        "Подписка",
-        (
-            "Выберите срок подписки HAVA VPN.\n\n"
-            "📅 1 месяц\n"
-            "⭐ 1 год"
-        ),
-    )
-
-
-def month_text(language: str) -> str:
-    if language == "en":
-        return design(
-            "1 month subscription",
-            (
-                "Period: 30 days\n"
-                "Status: available\n\n"
-                "Payment will be connected "
-                "at the next stage."
-            ),
-        )
-
-    return design(
-        "Подписка на 1 месяц",
-        (
-            "Срок: 30 дней\n"
-            "Статус: доступно\n\n"
-            "Оплата будет подключена "
-            "на следующем этапе."
-        ),
-    )
-
-
-def year_text(language: str) -> str:
-    if language == "en":
-        return design(
-            "1 year subscription",
-            (
-                "Period: 365 days\n"
-                "Status: available\n\n"
-                "Payment will be connected "
-                "at the next stage."
-            ),
-        )
-
-    return design(
-        "Годовая подписка",
-        (
-            "Срок: 365 дней\n"
-            "Статус: доступно\n\n"
-            "Оплата будет подключена "
-            "на следующем этапе."
-        ),
-    )
+def about_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔒 Политика конфиденциальности", url=PRIVACY_POLICY_URL)],
+        [InlineKeyboardButton(text="📄 Условия использования", url=TERMS_URL)],
+    ])
 
 
 @router.message(CommandStart())
 async def start(message: Message):
     language = get_language(message.from_user.id)
-
-    await message.answer(
-        welcome_text(language),
-        reply_markup=home_keyboard(language),
-    )
-
-    await message.answer(
-        "🌬 HAVA VPN",
-        reply_markup=reply_menu(),
-    )
+    main_message = await message.answer(main_text(language), reply_markup=reply_menu(), link_preview_options=link_preview())
+    try:
+        await main_message.edit_reply_markup(reply_markup=home_keyboard(language))
+    except TelegramBadRequest:
+        # Some Telegram clients may reject replacing a reply keyboard immediately.
+        await message.answer(main_text(language), reply_markup=home_keyboard(language), link_preview_options=link_preview())
 
 
 @router.callback_query(F.data == "hava:home")
 async def open_home(callback: CallbackQuery):
     language = get_language(callback.from_user.id)
-
-    await callback.message.edit_text(
-        welcome_text(language),
-        reply_markup=home_keyboard(language),
-    )
-
+    await callback.message.edit_text(main_text(language), reply_markup=home_keyboard(language), link_preview_options=link_preview())
     await callback.answer()
-
-
-@router.callback_query(F.data == "hava:plans")
-async def open_plans(callback: CallbackQuery):
-    language = get_language(callback.from_user.id)
-
-    await callback.message.edit_text(
-        plans_text(language),
-        reply_markup=plans_keyboard(language),
-    )
-
-    await callback.answer()
-
-
-@router.callback_query(F.data == "hava:month")
-async def open_month(callback: CallbackQuery):
-    language = get_language(callback.from_user.id)
-
-    await callback.message.edit_text(
-        month_text(language),
-        reply_markup=plan_keyboard(language),
-    )
-
-    await callback.answer()
-
-
-@router.callback_query(F.data == "hava:year")
-async def open_year(callback: CallbackQuery):
-    language = get_language(callback.from_user.id)
-
-    await callback.message.edit_text(
-        year_text(language),
-        reply_markup=plan_keyboard(language),
-    )
-
-    await callback.answer()
-
-
-@router.callback_query(F.data == "hava:buy")
-async def buy_placeholder(callback: CallbackQuery):
-    language = get_language(callback.from_user.id)
-
-    if language == "en":
-        text = (
-            "HAVA VPN payment will be "
-            "connected at the next stage."
-        )
-    else:
-        text = (
-            "Оплата HAVA VPN будет "
-            "подключена следующим этапом."
-        )
-
-    await callback.answer(
-        text,
-        show_alert=True,
-    )
 
 
 @router.callback_query(F.data == "hava:language")
 async def open_language(callback: CallbackQuery):
-    language = get_language(callback.from_user.id)
-
-    if language == "en":
-        text = design(
-            "Language",
-            "Choose your interface language.",
-        )
-    else:
-        text = design(
-            "Язык",
-            "Выберите язык интерфейса.",
-        )
-
-    await callback.message.edit_text(
-        text,
-        reply_markup=language_keyboard(),
-    )
-
+    await callback.message.edit_reply_markup(reply_markup=language_keyboard(get_language(callback.from_user.id)))
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("lang:"))
 async def select_language(callback: CallbackQuery):
     language = callback.data.split(":", 1)[1]
-
     if language not in {"ru", "en"}:
         await callback.answer()
         return
-
     user_languages[callback.from_user.id] = language
+    await callback.message.edit_text(main_text(language), reply_markup=home_keyboard(language), link_preview_options=link_preview())
+    await callback.answer()
 
-    await callback.message.edit_text(
-        welcome_text(language),
-        reply_markup=home_keyboard(language),
-    )
 
-    if language == "en":
-        await callback.answer(
-            "Language changed to English."
-        )
-    else:
-        await callback.answer(
-            "Язык изменён на русский."
-        )
+@router.callback_query(F.data == "hava:plans")
+async def open_plans(callback: CallbackQuery):
+    language = get_language(callback.from_user.id)
+    user_currencies.setdefault(callback.from_user.id, "RUB")
+    await callback.message.edit_text(main_text(language, subscription=True), reply_markup=plans_keyboard(callback.from_user.id, language), link_preview_options=link_preview())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "hava:currency")
+async def switch_currency(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    user_currencies[user_id] = CURRENCY_CYCLE[user_currencies.get(user_id, "RUB")]
+    await callback.message.edit_reply_markup(reply_markup=plans_keyboard(user_id, get_language(user_id)))
+    await callback.answer()
 
 
 @router.message(F.text == "👤 Мой кабинет")
 async def cabinet(message: Message):
-    language = get_language(message.from_user.id)
-
-    if language == "en":
-        text = design(
-            "My account",
-            (
-                f"Telegram ID: {message.from_user.id}\n"
-                "Subscription: inactive\n"
-                "Expiration date: —\n"
-                "VPN: disconnected\n"
-                "Status: test mode"
-            ),
-        )
+    if get_language(message.from_user.id) == "en":
+        text = f"<b>👤 My account</b>\n\nTelegram ID: <code>{message.from_user.id}</code>\nSubscription: inactive\nExpiration date: —\nStatus: test mode"
     else:
-        text = design(
-            "Мой кабинет",
-            (
-                f"Telegram ID: {message.from_user.id}\n"
-                "Подписка: не активна\n"
-                "Срок действия: —\n"
-                "VPN: не подключён\n"
-                "Статус: тестовый режим"
-            ),
-        )
-
+        text = f"<b>👤 Мой кабинет</b>\n\nTelegram ID: <code>{message.from_user.id}</code>\nПодписка: не активна\nСрок действия: —\nСтатус: тестовый режим"
     await message.answer(text)
 
 
 @router.message(F.text == "🛍 Магазин")
-async def shop(message: Message):
-    language = get_language(message.from_user.id)
-
-    if language == "en":
-        text = design(
-            "HAVA Store",
-            "Choose your VPN subscription.",
-        )
-    else:
-        text = design(
-            "Магазин HAVA",
-            "Выберите VPN-подписку.",
-        )
-
-    await message.answer(
-        text,
-        reply_markup=plans_keyboard(
-            language,
-            with_back=False,
-        ),
-    )
+async def shop_fallback(message: Message):
+    await message.answer("Mini App временно недоступен. Проверьте MINI_APP_URL.")
 
 
 @router.message(F.text == "❓ Помощь")
 async def help_section(message: Message):
-    language = get_language(message.from_user.id)
-
-    if language == "en":
-        text = design(
-            "Support",
-            (
-                "If you have problems with "
-                "connection, payment or subscription, "
-                "contact HAVA support.\n\n"
-                "Support will be connected "
-                "at the next stage."
-            ),
-        )
+    if get_language(message.from_user.id) == "en":
+        text = "<b>❓ HAVA VPN Help</b>\n\nIf you have problems with connection, payment or subscription, contact support.\n\nSupport will be connected at the next stage."
     else:
-        text = design(
-            "Помощь",
-            (
-                "Если у вас возникли проблемы "
-                "с подключением, оплатой или подпиской, "
-                "обратитесь в поддержку HAVA.\n\n"
-                "Поддержка будет подключена "
-                "на следующем этапе."
-            ),
-        )
-
+        text = "<b>❓ Помощь HAVA VPN</b>\n\nЕсли у вас возникли проблемы с подключением, оплатой или подпиской, обратитесь в поддержку.\n\nПоддержка будет подключена следующим этапом."
     await message.answer(text)
 
 
 @router.message(F.text == "ℹ️ О боте")
 async def about(message: Message):
-    language = get_language(message.from_user.id)
-
-    if language == "en":
-        text = design(
-            "About HAVA VPN",
-            (
-                "HAVA VPN is a Telegram service "
-                "for purchasing and managing VPN access.\n\n"
-                "After purchase, the user receives "
-                "personal VPN access and connects "
-                "through Happ.\n\n"
-                "HAVA means “air” — the brand represents "
-                "freedom, simplicity and open internet access."
-            ),
-        )
+    if get_language(message.from_user.id) == "en":
+        text = "<b>ℹ️ HAVA VPN</b>\n\nHAVA VPN is a Telegram service for purchasing and managing VPN subscriptions.\n\nAfter purchase, the user receives personal access and connects through Happ.\n\nHAVA means ‘air’ — freedom, lightness and open internet access."
     else:
-        text = design(
-            "О HAVA VPN",
-            (
-                "HAVA VPN — Telegram-сервис "
-                "для покупки и управления VPN-подпиской.\n\n"
-                "После покупки пользователь получает "
-                "персональный VPN-доступ "
-                "и подключается через Happ.\n\n"
-                "HAVA означает «воздух» — "
-                "бренд связан со свободой, лёгкостью "
-                "и свободным доступом к интернету."
-            ),
-        )
-
-    await message.answer(text)
+        text = "<b>ℹ️ HAVA VPN</b>\n\nHAVA VPN — Telegram-сервис для покупки и управления VPN-подпиской.\n\nПосле покупки пользователь получает персональную ссылку или ключ и подключает VPN через Happ.\n\nHAVA означает «воздух» — идея бренда связана со свободой, лёгкостью и свободным доступом к интернету."
+    await message.answer(text, reply_markup=about_keyboard())
