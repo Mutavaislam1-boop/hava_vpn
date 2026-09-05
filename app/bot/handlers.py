@@ -4,7 +4,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
-from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, LinkPreviewOptions, Message, ReplyKeyboardMarkup, WebAppInfo
+from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message, ReplyKeyboardMarkup, WebAppInfo
 
 from app.core.config import get_settings
 
@@ -24,9 +24,11 @@ user_languages: dict[int, str] = {}
 user_currencies: dict[int, str] = {}
 
 
-async def send_banner(message: Message) -> None:
-    await message.answer_video(
+async def send_block(message: Message, caption: str, reply_markup=None):
+    return await message.answer_video(
         video=FSInputFile(BANNER_PATH),
+        caption=caption,
+        reply_markup=reply_markup,
         supports_streaming=True,
     )
 
@@ -40,10 +42,6 @@ def mini_app_url(**params: str) -> str:
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
     query.update(params)
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
-
-
-def link_preview() -> LinkPreviewOptions:
-    return LinkPreviewOptions(is_disabled=False, url=BOT_URL, prefer_large_media=False, show_above_text=True)
 
 
 def main_text(language: str, subscription: bool = False) -> str:
@@ -121,19 +119,17 @@ def about_keyboard() -> InlineKeyboardMarkup:
 @router.message(CommandStart())
 async def start(message: Message):
     language = get_language(message.from_user.id)
-    await send_banner(message)
-    main_message = await message.answer(main_text(language), reply_markup=reply_menu(), link_preview_options=link_preview())
+    main_message = await send_block(message, main_text(language), reply_menu())
     try:
-        await main_message.edit_reply_markup(reply_markup=home_keyboard(language))
+        await main_message.edit_caption(caption=main_text(language), reply_markup=home_keyboard(language))
     except TelegramBadRequest:
-        # Some Telegram clients may reject replacing a reply keyboard immediately.
-        await message.answer(main_text(language), reply_markup=home_keyboard(language), link_preview_options=link_preview())
+        await send_block(message, main_text(language), home_keyboard(language))
 
 
 @router.callback_query(F.data == "hava:home")
 async def open_home(callback: CallbackQuery):
     language = get_language(callback.from_user.id)
-    await callback.message.edit_text(main_text(language), reply_markup=home_keyboard(language), link_preview_options=link_preview())
+    await callback.message.edit_caption(caption=main_text(language), reply_markup=home_keyboard(language))
     await callback.answer()
 
 
@@ -150,7 +146,7 @@ async def select_language(callback: CallbackQuery):
         await callback.answer()
         return
     user_languages[callback.from_user.id] = language
-    await callback.message.edit_text(main_text(language), reply_markup=home_keyboard(language), link_preview_options=link_preview())
+    await callback.message.edit_caption(caption=main_text(language), reply_markup=home_keyboard(language))
     await callback.answer()
 
 
@@ -158,7 +154,7 @@ async def select_language(callback: CallbackQuery):
 async def open_plans(callback: CallbackQuery):
     language = get_language(callback.from_user.id)
     user_currencies.setdefault(callback.from_user.id, "RUB")
-    await callback.message.edit_text(main_text(language, subscription=True), reply_markup=plans_keyboard(callback.from_user.id, language), link_preview_options=link_preview())
+    await callback.message.edit_caption(caption=main_text(language, subscription=True), reply_markup=plans_keyboard(callback.from_user.id, language))
     await callback.answer()
 
 
@@ -176,14 +172,12 @@ async def cabinet(message: Message):
         text = f"<b>👤 My account</b>\n\nTelegram ID: <code>{message.from_user.id}</code>\nSubscription: inactive\nExpiration date: —\nStatus: test mode"
     else:
         text = f"<b>👤 Мой кабинет</b>\n\nTelegram ID: <code>{message.from_user.id}</code>\nПодписка: не активна\nСрок действия: —\nСтатус: тестовый режим"
-    await send_banner(message)
-    await message.answer(text)
+    await send_block(message, text)
 
 
 @router.message(F.text == "🛍 Магазин")
 async def shop_fallback(message: Message):
-    await send_banner(message)
-    await message.answer("Mini App временно недоступен. Проверьте MINI_APP_URL.")
+    await send_block(message, "Mini App временно недоступен. Проверьте MINI_APP_URL.")
 
 
 @router.message(F.text == "❓ Помощь")
@@ -192,8 +186,7 @@ async def help_section(message: Message):
         text = "<b>❓ HAVA VPN Help</b>\n\nIf you have problems with connection, payment or subscription, contact support.\n\nSupport will be connected at the next stage."
     else:
         text = "<b>❓ Помощь HAVA VPN</b>\n\nЕсли у вас возникли проблемы с подключением, оплатой или подпиской, обратитесь в поддержку.\n\nПоддержка будет подключена следующим этапом."
-    await send_banner(message)
-    await message.answer(text)
+    await send_block(message, text)
 
 
 @router.message(F.text == "ℹ️ О боте")
@@ -202,5 +195,4 @@ async def about(message: Message):
         text = "<b>ℹ️ HAVA VPN</b>\n\nHAVA VPN is a Telegram service for purchasing and managing VPN subscriptions.\n\nAfter purchase, the user receives personal access and connects through Happ.\n\nHAVA means ‘air’ — freedom, lightness and open internet access."
     else:
         text = "<b>ℹ️ HAVA VPN</b>\n\nHAVA VPN — Telegram-сервис для покупки и управления VPN-подпиской.\n\nПосле покупки пользователь получает персональную ссылку или ключ и подключает VPN через Happ.\n\nHAVA означает «воздух» — идея бренда связана со свободой, лёгкостью и свободным доступом к интернету."
-    await send_banner(message)
-    await message.answer(text, reply_markup=about_keyboard())
+    await send_block(message, text, about_keyboard())
