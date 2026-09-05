@@ -1,9 +1,10 @@
+from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, LinkPreviewOptions, Message, ReplyKeyboardMarkup, WebAppInfo
+from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, LinkPreviewOptions, Message, ReplyKeyboardMarkup, WebAppInfo
 
 from app.core.config import get_settings
 
@@ -12,6 +13,7 @@ router = Router()
 BOT_URL = "https://t.me/hava_vpn_bot"
 PRIVACY_POLICY_URL = "https://havavpn.com/privacy"
 TERMS_URL = "https://havavpn.com/terms"
+BANNER_PATH = Path(__file__).parent / "assets" / "hava-banner.mp4"
 
 MONTH_PRICES = {"RUB": "360 ₽", "USD": "$4", "KZT": "2 100 ₸"}
 YEAR_PRICES = {"RUB": "4 999 ₽", "USD": "$55", "KZT": "29 000 ₸"}
@@ -20,6 +22,13 @@ CURRENCY_BUTTONS = {"RUB": "$ USD", "USD": "₸ KZT", "KZT": "₽ RUB"}
 
 user_languages: dict[int, str] = {}
 user_currencies: dict[int, str] = {}
+
+
+async def send_banner(message: Message) -> None:
+    await message.answer_video(
+        video=FSInputFile(BANNER_PATH),
+        supports_streaming=True,
+    )
 
 
 def get_language(user_id: int) -> str:
@@ -112,6 +121,7 @@ def about_keyboard() -> InlineKeyboardMarkup:
 @router.message(CommandStart())
 async def start(message: Message):
     language = get_language(message.from_user.id)
+    await send_banner(message)
     main_message = await message.answer(main_text(language), reply_markup=reply_menu(), link_preview_options=link_preview())
     try:
         await main_message.edit_reply_markup(reply_markup=home_keyboard(language))
@@ -166,11 +176,13 @@ async def cabinet(message: Message):
         text = f"<b>👤 My account</b>\n\nTelegram ID: <code>{message.from_user.id}</code>\nSubscription: inactive\nExpiration date: —\nStatus: test mode"
     else:
         text = f"<b>👤 Мой кабинет</b>\n\nTelegram ID: <code>{message.from_user.id}</code>\nПодписка: не активна\nСрок действия: —\nСтатус: тестовый режим"
+    await send_banner(message)
     await message.answer(text)
 
 
 @router.message(F.text == "🛍 Магазин")
 async def shop_fallback(message: Message):
+    await send_banner(message)
     await message.answer("Mini App временно недоступен. Проверьте MINI_APP_URL.")
 
 
@@ -180,6 +192,7 @@ async def help_section(message: Message):
         text = "<b>❓ HAVA VPN Help</b>\n\nIf you have problems with connection, payment or subscription, contact support.\n\nSupport will be connected at the next stage."
     else:
         text = "<b>❓ Помощь HAVA VPN</b>\n\nЕсли у вас возникли проблемы с подключением, оплатой или подпиской, обратитесь в поддержку.\n\nПоддержка будет подключена следующим этапом."
+    await send_banner(message)
     await message.answer(text)
 
 
@@ -189,4 +202,5 @@ async def about(message: Message):
         text = "<b>ℹ️ HAVA VPN</b>\n\nHAVA VPN is a Telegram service for purchasing and managing VPN subscriptions.\n\nAfter purchase, the user receives personal access and connects through Happ.\n\nHAVA means ‘air’ — freedom, lightness and open internet access."
     else:
         text = "<b>ℹ️ HAVA VPN</b>\n\nHAVA VPN — Telegram-сервис для покупки и управления VPN-подпиской.\n\nПосле покупки пользователь получает персональную ссылку или ключ и подключает VPN через Happ.\n\nHAVA означает «воздух» — идея бренда связана со свободой, лёгкостью и свободным доступом к интернету."
+    await send_banner(message)
     await message.answer(text, reply_markup=about_keyboard())
