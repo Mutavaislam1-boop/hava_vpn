@@ -8,6 +8,8 @@ from fastapi import FastAPI
 from app.bot import router
 from app.bot.instance import bot
 from app.core.config import get_settings
+from app.core.database import db
+from app.vpn import get_vpn_provider
 from app.web import app as web_app
 
 
@@ -31,6 +33,14 @@ def design(title: str, body: str) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await db.initialize()
+    settings = get_settings()
+    try:
+        provider_online = await get_vpn_provider().health_check()
+        logging.info("VPN provider %s: %s", get_vpn_provider().name, "ONLINE" if provider_online else "ERROR")
+    except Exception as exc:
+        provider_online = False
+        logging.error("VPN provider %s: ERROR (%s)", settings.vpn_provider, exc)
     dispatcher = Dispatcher()
     dispatcher.include_router(router)
 
