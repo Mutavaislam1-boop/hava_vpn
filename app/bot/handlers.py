@@ -2,7 +2,6 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message, ReplyKeyboardMarkup, WebAppInfo
 
@@ -120,10 +119,7 @@ def about_keyboard() -> InlineKeyboardMarkup:
 async def start(message: Message):
     language = get_language(message.from_user.id)
     main_message = await send_block(message, main_text(language), reply_menu())
-    try:
-        await main_message.edit_caption(caption=main_text(language), reply_markup=home_keyboard(language))
-    except TelegramBadRequest:
-        await send_block(message, main_text(language), home_keyboard(language))
+    await main_message.edit_caption(caption=main_text(language), reply_markup=home_keyboard(language))
 
 
 @router.callback_query(F.data == "hava:home")
