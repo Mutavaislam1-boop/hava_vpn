@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from aiogram import F, Router
@@ -11,8 +12,8 @@ from app.core.config import get_settings
 router = Router()
 
 BOT_URL = "https://t.me/hava_vpn_bot"
-PRIVACY_POLICY_URL = "https://havavpn.com/privacy"
-TERMS_URL = "https://havavpn.com/terms"
+PRIVACY_POLICY_URL = f"{get_settings().mini_app_url.rstrip('/')}/privacy"
+TERMS_URL = f"{get_settings().mini_app_url.rstrip('/')}/terms"
 BANNER_PATH = Path(__file__).parent / "assets" / "hava-banner.mp4"
 
 MONTH_PRICES = {"RUB": "360 ₽", "USD": "$4", "KZT": "2 100 ₸"}
@@ -34,8 +35,9 @@ async def send_block(message: Message, caption: str, reply_markup=None):
     )
 
 
-async def activate_reply_menu(message: Message) -> None:
-    menu_message = await message.answer("Главное меню HAVA VPN", reply_markup=reply_menu())
+async def activate_reply_menu(message: Message, language: str) -> None:
+    title = "HAVA VPN main menu" if language == "en" else "Главное меню HAVA VPN"
+    menu_message = await message.answer(title, reply_markup=reply_menu(language))
     try:
         await menu_message.delete()
     except TelegramBadRequest:
@@ -60,8 +62,14 @@ async def edit_main_block(message: Message, caption: str, reply_markup=None) -> 
     main_message_ids[message.chat.id] = main_message.message_id
 
 
-def get_language(user_id: int) -> str:
-    return user_languages.get(user_id, "ru")
+def get_language(user_id: int, telegram_language_code: Optional[str] = None) -> str:
+    if user_id in user_languages:
+        return user_languages[user_id]
+    return "ru" if (telegram_language_code or "").lower().startswith("ru") else "en"
+
+
+def language_for(user) -> str:
+    return get_language(user.id, getattr(user, "language_code", None))
 
 
 def mini_app_url(**params: str) -> str:
@@ -94,12 +102,19 @@ def main_text(language: str, subscription: bool = False) -> str:
     )
 
 
-def reply_menu() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
+def reply_menu(language: str = "ru") -> ReplyKeyboardMarkup:
+    if language == "en":
+        keyboard = [
+            [KeyboardButton(text="👤 My account"), KeyboardButton(text="🛍 Store")],
+            [KeyboardButton(text="❓ Help"), KeyboardButton(text="ℹ️ About")],
+        ]
+    else:
+        keyboard = [
             [KeyboardButton(text="👤 Мой кабинет"), KeyboardButton(text="🛍 Магазин")],
             [KeyboardButton(text="❓ Помощь"), KeyboardButton(text="ℹ️ О боте")],
-        ],
+        ]
+    return ReplyKeyboardMarkup(
+        keyboard=keyboard,
         resize_keyboard=True,
         is_persistent=True,
     )
@@ -142,21 +157,21 @@ def about_keyboard() -> InlineKeyboardMarkup:
 
 @router.message(CommandStart())
 async def start(message: Message):
-    language = get_language(message.from_user.id)
-    await activate_reply_menu(message)
+    language = language_for(message.from_user)
+    await activate_reply_menu(message, language)
     await edit_main_block(message, main_text(language), home_keyboard(language))
 
 
 @router.callback_query(F.data == "hava:home")
 async def open_home(callback: CallbackQuery):
-    language = get_language(callback.from_user.id)
+    language = language_for(callback.from_user)
     await callback.message.edit_caption(caption=main_text(language), reply_markup=home_keyboard(language))
     await callback.answer()
 
 
 @router.callback_query(F.data == "hava:language")
 async def open_language(callback: CallbackQuery):
-    await callback.message.edit_reply_markup(reply_markup=language_keyboard(get_language(callback.from_user.id)))
+    await callback.message.edit_reply_markup(reply_markup=language_keyboard(language_for(callback.from_user)))
     await callback.answer()
 
 
@@ -167,13 +182,14 @@ async def select_language(callback: CallbackQuery):
         await callback.answer()
         return
     user_languages[callback.from_user.id] = language
+    await activate_reply_menu(callback.message, language)
     await callback.message.edit_caption(caption=main_text(language), reply_markup=home_keyboard(language))
     await callback.answer()
 
 
 @router.callback_query(F.data == "hava:plans")
 async def open_plans(callback: CallbackQuery):
-    language = get_language(callback.from_user.id)
+    language = language_for(callback.from_user)
     user_currencies.setdefault(callback.from_user.id, "RUB")
     await callback.message.edit_caption(caption=main_text(language, subscription=True), reply_markup=plans_keyboard(callback.from_user.id, language))
     await callback.answer()
@@ -183,38 +199,40 @@ async def open_plans(callback: CallbackQuery):
 async def switch_currency(callback: CallbackQuery):
     user_id = callback.from_user.id
     user_currencies[user_id] = CURRENCY_CYCLE[user_currencies.get(user_id, "RUB")]
-    await callback.message.edit_reply_markup(reply_markup=plans_keyboard(user_id, get_language(user_id)))
+    await callback.message.edit_reply_markup(reply_markup=plans_keyboard(user_id, language_for(callback.from_user)))
     await callback.answer()
 
 
-@router.message(F.text == "👤 Мой кабинет")
+@router.message(F.text.in_({"👤 Мой кабинет", "👤 My account"}))
 async def cabinet(message: Message):
-    if get_language(message.from_user.id) == "en":
+    language = language_for(message.from_user)
+    if language == "en":
         text = f"<b>👤 My account</b>\n\nTelegram ID: <code>{message.from_user.id}</code>\nSubscription: inactive\nExpiration date: —\nStatus: test mode"
     else:
         text = f"<b>👤 Мой кабинет</b>\n\nTelegram ID: <code>{message.from_user.id}</code>\nПодписка: не активна\nСрок действия: —\nСтатус: тестовый режим"
-    await edit_main_block(message, text, home_keyboard(get_language(message.from_user.id)))
+    await edit_main_block(message, text, home_keyboard(language))
 
 
-@router.message(F.text == "🛍 Магазин")
+@router.message(F.text.in_({"🛍 Магазин", "🛍 Store"}))
 async def shop(message: Message):
-    language = get_language(message.from_user.id)
+    language = language_for(message.from_user)
     user_currencies.setdefault(message.from_user.id, "RUB")
     await edit_main_block(message, main_text(language, subscription=True), plans_keyboard(message.from_user.id, language))
 
 
-@router.message(F.text == "❓ Помощь")
+@router.message(F.text.in_({"❓ Помощь", "❓ Help"}))
 async def help_section(message: Message):
-    if get_language(message.from_user.id) == "en":
+    language = language_for(message.from_user)
+    if language == "en":
         text = "<b>❓ HAVA VPN Help</b>\n\nIf you have problems with connection, payment or subscription, contact support.\n\nSupport will be connected at the next stage."
     else:
         text = "<b>❓ Помощь HAVA VPN</b>\n\nЕсли у вас возникли проблемы с подключением, оплатой или подпиской, обратитесь в поддержку.\n\nПоддержка будет подключена следующим этапом."
-    await edit_main_block(message, text, home_keyboard(get_language(message.from_user.id)))
+    await edit_main_block(message, text, home_keyboard(language))
 
 
-@router.message(F.text == "ℹ️ О боте")
+@router.message(F.text.in_({"ℹ️ О боте", "ℹ️ About"}))
 async def about(message: Message):
-    if get_language(message.from_user.id) == "en":
+    if language_for(message.from_user) == "en":
         text = "<b>ℹ️ HAVA VPN</b>\n\nHAVA VPN is a Telegram service for purchasing and managing VPN subscriptions.\n\nAfter purchase, the user receives personal access and connects through Happ.\n\nHAVA means ‘air’ — freedom, lightness and open internet access."
     else:
         text = "<b>ℹ️ HAVA VPN</b>\n\nHAVA VPN — Telegram-сервис для покупки и управления VPN-подпиской.\n\nПосле покупки пользователь получает персональную ссылку или ключ и подключает VPN через Happ.\n\nHAVA означает «воздух» — идея бренда связана со свободой, лёгкостью и свободным доступом к интернету."
