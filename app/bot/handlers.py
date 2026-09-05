@@ -2,6 +2,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message, ReplyKeyboardMarkup, WebAppInfo
 
@@ -21,6 +22,7 @@ CURRENCY_BUTTONS = {"RUB": "$ USD", "USD": "₸ KZT", "KZT": "₽ RUB"}
 
 user_languages: dict[int, str] = {}
 user_currencies: dict[int, str] = {}
+main_message_ids: dict[int, int] = {}
 
 
 async def send_block(message: Message, caption: str, reply_markup=None):
@@ -30,6 +32,32 @@ async def send_block(message: Message, caption: str, reply_markup=None):
         reply_markup=reply_markup,
         supports_streaming=True,
     )
+
+
+async def activate_reply_menu(message: Message) -> None:
+    menu_message = await message.answer("Главное меню HAVA VPN", reply_markup=reply_menu())
+    try:
+        await menu_message.delete()
+    except TelegramBadRequest:
+        pass
+
+
+async def edit_main_block(message: Message, caption: str, reply_markup=None) -> None:
+    message_id = main_message_ids.get(message.chat.id)
+    if message_id:
+        try:
+            await message.bot.edit_message_caption(
+                chat_id=message.chat.id,
+                message_id=message_id,
+                caption=caption,
+                reply_markup=reply_markup,
+            )
+            return
+        except TelegramBadRequest:
+            pass
+
+    main_message = await send_block(message, caption, reply_markup)
+    main_message_ids[message.chat.id] = main_message.message_id
 
 
 def get_language(user_id: int) -> str:
@@ -67,12 +95,9 @@ def main_text(language: str, subscription: bool = False) -> str:
 
 
 def reply_menu() -> ReplyKeyboardMarkup:
-    shop_button = KeyboardButton(text="🛍 Магазин")
-    if get_settings().mini_app_url.strip().startswith("https://"):
-        shop_button = KeyboardButton(text="🛍 Магазин", web_app=WebAppInfo(url=mini_app_url(section="shop")))
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="👤 Мой кабинет"), shop_button],
+            [KeyboardButton(text="👤 Мой кабинет"), KeyboardButton(text="🛍 Магазин")],
             [KeyboardButton(text="❓ Помощь"), KeyboardButton(text="ℹ️ О боте")],
         ],
         resize_keyboard=True,
@@ -118,8 +143,8 @@ def about_keyboard() -> InlineKeyboardMarkup:
 @router.message(CommandStart())
 async def start(message: Message):
     language = get_language(message.from_user.id)
-    main_message = await send_block(message, main_text(language), reply_menu())
-    await main_message.edit_caption(caption=main_text(language), reply_markup=home_keyboard(language))
+    await activate_reply_menu(message)
+    await edit_main_block(message, main_text(language), home_keyboard(language))
 
 
 @router.callback_query(F.data == "hava:home")
@@ -168,12 +193,14 @@ async def cabinet(message: Message):
         text = f"<b>👤 My account</b>\n\nTelegram ID: <code>{message.from_user.id}</code>\nSubscription: inactive\nExpiration date: —\nStatus: test mode"
     else:
         text = f"<b>👤 Мой кабинет</b>\n\nTelegram ID: <code>{message.from_user.id}</code>\nПодписка: не активна\nСрок действия: —\nСтатус: тестовый режим"
-    await send_block(message, text)
+    await edit_main_block(message, text, home_keyboard(get_language(message.from_user.id)))
 
 
 @router.message(F.text == "🛍 Магазин")
-async def shop_fallback(message: Message):
-    await send_block(message, "Mini App временно недоступен. Проверьте MINI_APP_URL.")
+async def shop(message: Message):
+    language = get_language(message.from_user.id)
+    user_currencies.setdefault(message.from_user.id, "RUB")
+    await edit_main_block(message, main_text(language, subscription=True), plans_keyboard(message.from_user.id, language))
 
 
 @router.message(F.text == "❓ Помощь")
@@ -182,7 +209,7 @@ async def help_section(message: Message):
         text = "<b>❓ HAVA VPN Help</b>\n\nIf you have problems with connection, payment or subscription, contact support.\n\nSupport will be connected at the next stage."
     else:
         text = "<b>❓ Помощь HAVA VPN</b>\n\nЕсли у вас возникли проблемы с подключением, оплатой или подпиской, обратитесь в поддержку.\n\nПоддержка будет подключена следующим этапом."
-    await send_block(message, text)
+    await edit_main_block(message, text, home_keyboard(get_language(message.from_user.id)))
 
 
 @router.message(F.text == "ℹ️ О боте")
@@ -191,4 +218,4 @@ async def about(message: Message):
         text = "<b>ℹ️ HAVA VPN</b>\n\nHAVA VPN is a Telegram service for purchasing and managing VPN subscriptions.\n\nAfter purchase, the user receives personal access and connects through Happ.\n\nHAVA means ‘air’ — freedom, lightness and open internet access."
     else:
         text = "<b>ℹ️ HAVA VPN</b>\n\nHAVA VPN — Telegram-сервис для покупки и управления VPN-подпиской.\n\nПосле покупки пользователь получает персональную ссылку или ключ и подключает VPN через Happ.\n\nHAVA означает «воздух» — идея бренда связана со свободой, лёгкостью и свободным доступом к интернету."
-    await send_block(message, text, about_keyboard())
+    await edit_main_block(message, text, about_keyboard())
